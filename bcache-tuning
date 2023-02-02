@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+# document https://www.kernel.org/doc/Documentation/bcache.txt
+import os
+import re
+
+DEV_BLOCK_PATH    = '/dev/block/'
+SYSFS_BCACHE_PATH = '/sys/fs/bcache/'
+SYSFS_BLOCK_PATH  = '/sys/block/'
+
+def congested_read_threshold_us(item):
+    return 'echo 0 > /sys/fs/bcache/%s/congested_read_threshold_us' % item
+
+def congested_write_threshold_us(item):
+    return 'echo 0 > /sys/fs/bcache/%s/congested_write_threshold_us' % item
+
+def sequential_cutoff(item):
+    return 'echo 0 > /sys/block/%s/bcache/sequential_cutoff' % item
+
+def cache_mode(item):
+    return 'echo writeback > /sys/block/%s/bcache/cache_mode' % item
+
+def devices():
+    global SYSFS_BLOCK_PATH
+    ret = set()
+    bcache = set()
+
+    for bdev in os.listdir(SYSFS_BLOCK_PATH):
+        if re.match(r'bcache\d+', bdev):
+            bcache.add(bdev)
+
+        link = '%s%s/bcache/cache' % (SYSFS_BLOCK_PATH, bdev)
+        if not os.path.islink(link):
+            continue
+        basename = os.path.basename(os.readlink(link))
+        ret.add(basename)
+    return [ret, bcache]
+
+def main():
+    bdev, bcache = devices()
+    for item in bdev:
+        for fun in (congested_read_threshold_us, congested_read_threshold_us):
+            ok = False
+            if os.system(fun(item)) == 0:
+                ok = True
+            print('%s | %s' % (fun(item), 'ok' if ok else 'fail'))
+
+    for item in bcache:
+        for fun in (sequential_cutoff, cache_mode):
+            ok = False
+            if os.system(fun(item)) == 0:
+                ok = True
+            print('%s | %s' % (fun(item), 'ok' if ok else 'fail'))
+
+if __name__ == '__main__':
+    main()
